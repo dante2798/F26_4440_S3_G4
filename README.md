@@ -12,8 +12,8 @@ This is the group project for the course, completed by a team of two students. T
 
 | Name | Student ID | Email |
 |---|---|---|
-| Daniel Anaya Murcia | [PENDING] | [PENDING] |
-| Steven [PENDING LAST NAME] | [PENDING] | [PENDING] |
+| Daniel Anaya Murcia | 300403740 | anayamurciad@student.douglascollege.ca |
+| Steven Anderson | [PENDING] | [PENDING] |
 
 Instructor: kandhadaip@douglascollege.ca
 
