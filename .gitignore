@@ -1,0 +1,6 @@
+*.apk
+*.img
+*.tar
+*.ab
+ext*/
+out*/
