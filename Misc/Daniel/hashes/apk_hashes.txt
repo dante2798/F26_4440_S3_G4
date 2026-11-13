@@ -1,0 +1,6 @@
+SHA256 hash of apks\joplin-v3.7.10.apk:
+2060b9c98c40a37c85138db641ed20a0eb7d1af13e3e17add434abcdb186f34a
+CertUtil: -hashfile command completed successfully.
+SHA256 hash of apks\fenix-160.0.multi.android-x86_64.apk:
+11e9aaba70dfcccefded85cd67ebd7a6829d0f5dfad04b2f99771c3b5c71a9b7
+CertUtil: -hashfile command completed successfully.
