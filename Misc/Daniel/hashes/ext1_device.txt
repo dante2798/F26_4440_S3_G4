@@ -1,0 +1,2 @@
+fbb84c1e25b41647c55a174145ef299b2c94380364fde8be8c631f74d79c0c80  /data/data/net.cozic.joplin/databases/joplin.sqlite
+c099d39c7417e63ba2f2124f3cf8c64febe9cb681787b367a803bb9e82dfce1f  /data/data/org.mozilla.firefox/files/places.sqlite
