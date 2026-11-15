@@ -1,0 +1,6 @@
+SHA256 hash of extractions\ext2\data\data\net.cozic.joplin\databases\joplin.sqlite:
+9d84bb1bbdaabf786952ae4c313458c0f2109e0ef463ee6e6c2c13998fed9195
+CertUtil: -hashfile command completed successfully.
+SHA256 hash of extractions\ext2\data\data\org.mozilla.firefox\files\places.sqlite:
+4708b67b5e3317247166214fb927c28aae0cf59dbfba0d2c360686955de7dce0
+CertUtil: -hashfile command completed successfully.
