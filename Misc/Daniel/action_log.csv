@@ -1,8 +1,17 @@
 time_utc,app,action,details
-2026-11-13 04:23,Joplin,first_open,"Welcome notebook created by the app (5 default notes)"
+2026-11-13 04:23,Joplin,first_open,"App opened for the first time (5 default Welcome notes)"
 2026-11-13 04:37,Firefox,visit,steampowered.com (redirects to store.steampowered.com)
 2026-11-13 04:38,Firefox,visit,steamcommunity.com
 2026-11-13 04:38,Firefox,visit,store.steampowered.com/news/
 2026-11-13 04:38,Firefox,visit,wikipedia.org
 2026-11-13 04:40,Joplin,create_notebook,Gaming
 2026-11-13 04:40,Joplin,create_note,"Steam account backup"
+2026-11-13 04:41,Joplin,create_note,"Discord login"
+2026-11-13 04:42,Joplin,create_note,"Shopping list"
+2026-11-13 04:55,Joplin,edit_note,"Steam account backup - changed password"
+2026-11-14 06:20,ADB,acquisition,ext1 (adb pull + SHA-256)
+2026-11-15 07:13,Firefox,save_login,the-internet.herokuapp.com (tomsmith)
+2026-11-15 07:14,Firefox,close_tab,example.com
+2026-11-15 07:14,Firefox,close_tab,wikipedia.org
+2026-11-15 07:15,Joplin,move_to_trash,"Discord login"
+2026-11-15 07:18,ADB,acquisition,ext2 (adb pull + SHA-256)
