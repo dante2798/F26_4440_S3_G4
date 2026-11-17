@@ -22,18 +22,6 @@ This is the group project for the course, and it focuses on the forensic analysi
 | Daniel Anaya Murcia | ALEAPP | Firefox for Android, Joplin |
 | Steven Anderson | Objection + JADX, SQLite4N6 + Diffoscope | Steam Mobile, Discord |
 
-## Project status
-
-| Deliverable | Status |
-|---|---|
-| GitHub repository and README | Done (Oct 25) |
-| Project proposal | Submitted (Oct 25), see ReportsAndDocuments |
-| Progress report – Daniel | Submitted (Nov 15), see ReportsAndDocuments |
-| Progress report – Steven | To be added by Steven |
-| Integration (shared timeline) | Planned, after the individual parts |
-| Final report | Due Dec 2 |
-| Demo / presentation | Dec 4 |
-
 ## Daniel's part – ALEAPP on Firefox for Android and Joplin
 
 I use ALEAPP, an open-source tool that parses Android app databases and builds an HTML report, to analyze Firefox for Android (web activity) and Joplin (notes). I run the scenario on a dedicated emulator, extract the app data at each stage, and check ALEAPP's results against my own SQL queries in DB Browser for SQLite, so I can see what the tool shows and what it misses.
@@ -81,8 +69,7 @@ F26_4440_S3_G4/
 ├── ReportsAndDocuments/    (proposal, progress reports, final report)
 └── Misc/
     ├── Daniel/             (Daniel's evidence and notes)
-    ├── Steven/             (Steven's evidence and notes, to be added)
-    └── Integration/        (shared timeline, planned)
+    └── Steven/             (Steven's evidence and notes, to be added)
 ```
 
 We both work on the main branch, and each member only changes their own folder, so our work stays separate until the integration.
