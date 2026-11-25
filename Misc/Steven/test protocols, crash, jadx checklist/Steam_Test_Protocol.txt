@@ -1,0 +1,197 @@
+STEAM TEST PROTOCOL - CSIS 4440 Group 4 (Steven)
+Version 1, written 2026-11-24. Same steps on the emulator and the phone.
+
+ROLES
+  Device under test (DUT) : runs the Steam app with the Steam Guard authenticator.
+      Emulator : Android26 (emulator-5556), friend's Steam account.
+      Phone    : Xiaomi Mi Note 2 (2c3f64eb), my own Steam account.
+  "Attacker" PC           : Chrome incognito on the PC, signing in to the SAME account
+                            on store.steampowered.com / steamcommunity.com.
+  Steam 3.10.14 on both (emulator x86_64, phone arm64-v8a).
+
+TIME RULE
+  Write the PC clock time (local, UTC-7), HH:MM:SS. The pull script records UTC
+  and device time at every stage, so the two can be lined up later.
+
+MARKERS
+  Anything typed starts with a marker: STEAM01, STEAM02 ... Never reuse one.
+
+SAFETY RULES (read before starting)
+  1. The authenticator exists on ONE device only. NEVER clear Steam's data or
+     uninstall Steam while the authenticator is on the DUT. Move it away first
+     (stage E). Clearing first = authenticator lost = revocation code needed =
+     15-day trade/market restriction.
+  2. Revocation code (R....) is written down OFF the phone and OUT of this
+     project folder. Never type it into these files, the report or screenshots.
+  3. Steam stores the authenticator secrets in its app data. Record WHERE they
+     are and HOW they are protected. Never copy the values into notes, the
+     report, screenshots or GitHub. Keep collected\ off GitHub.
+  4. Use only the two accounts named above, with their owners' consent.
+
+PULL COMMANDS (project folder, PowerShell)
+  Phone:
+    powershell -ExecutionPolicy Bypass -File scripts\Pull-AppData.ps1 -Serial 2c3f64eb -Package com.valvesoftware.android.steam.community -Prefix steam_phone -IncludeExternal -Stage <stage>
+  Emulator (start it with -no-snapshot first):
+    powershell -ExecutionPolicy Bypass -File scripts\Pull-AppData.ps1 -Serial emulator-5554 -AdbRoot -Package com.valvesoftware.android.steam.community -Prefix steam_emu -IncludeExternal -Stage <stage>
+  Output: collected\<prefix>_<stage>.tar (+ _external.tar) and collected\collection_log.csv.
+  The script force-stops Steam; open it again afterwards. MISMATCH -> rerun as <stage>_b.
+
+
+========================================================================
+PREPARATION
+========================================================================
+EMULATOR (already logged in, authenticator already moved here)
+[ ] PE1 Start: emulator.exe -avd Android26 -no-snapshot
+[ ] PE2 Do NOT clear Steam data (authenticator would be lost). Note for the report:
+        "Emulator baseline = state after first login and authenticator move;
+         Steam was also opened during WebView crash tests on Nov 20-21."
+[ ] PE3 Revocation code for the friend's account is saved (yes / no): yes
+
+PHONE
+[ ] PP1 TWRP backup on the PC.
+[ ] PP2 Play Store auto-update OFF for Steam.
+[ ] PP3 Settings > Apps > Steam > Storage > Clear data   (BEFORE the authenticator)
+[ ] PP4 Open Steam, log in with my account.
+[ ] PP5 Steam Guard tab > Move Authenticator (from my daily phone), confirm by SMS.
+        Expect a 2-day trade/market restriction.
+[ ] PP6 Revocation code written down off the phone (yes / no): yes
+
+BOTH
+[ ] Attacker PC: Chrome incognito window ready, signed OUT of Steam.
+[ ] Root check: phone  adb -s 2c3f64eb shell su -c id   -> uid=0
+                emulator  adb -s emulator-5556 root, then adb -s emulator-5556 shell id -> uid=0
+
+
+========================================================================
+STAGE 01 - BASELINE (logged in, authenticator active, nothing else done)
+========================================================================
+[ ] Pull -Stage 01_baseline                                     PC time 3:33
+
+
+========================================================================
+STAGE A - STEAM GUARD EVENTS (the scenario's core)
+========================================================================
+Step What happens                                                      PC time
+A1   On the DUT open the Steam Guard tab; leave the code screen
+     open ~30 s (do NOT write the code down).                          3:36
+A2   Attacker PC: sign in to the account (password). DUT shows a
+     login request. Note what it shows (location / device / IP) in
+     NOTES. APPROVE it on the DUT.                                     3:38
+A3   Attacker PC: sign out, sign in again. DENY it on the DUT.         3:39
+A4   Attacker PC: sign in again and choose "enter a code instead";
+     type the current code from the DUT.                               3:40
+A5   On the DUT: Steam Guard tab > check for a list of recent
+     sign-ins / authorized devices; note what is shown.                3:41
+
+[ ] Wait 1 minute. Pull -Stage 02_after_guard                    PC time 3:43
+
+
+========================================================================
+STAGE B - ACCOUNT ACTIVITY (gives the app something to store)
+========================================================================
+B1   Attacker PC (signed in): open the account's profile and change
+     the profile summary to "STEAM01 profile edited by attacker".       3:45
+B2   DUT: open your own profile and refresh until STEAM01 shows.       4:35
+B3   DUT: Store > search the free game "Team Fortress 2", open its page. 4:36 (changed to deadlock since tf2 already in the library)
+B4   DUT: add Team Fortress 2 to the wishlist.                         4:36
+B5   DUT: open Notifications (bell) and read them.                     4:37
+B6   Attacker PC: Steam chat (steamcommunity.com/chat) to a friend
+     is optional - skip if no friend account is available.
+     If done: send "STEAM03 chat from attacker".                       4:43
+B7   DUT: if B6 done, open the chat and read STEAM03.                  skipped
+
+[ ] Wait 1 minute. Pull -Stage 03_after_activity                 PC time 4:45
+
+
+========================================================================
+STAGE C - COVERING TRACKS (attacker side, as in the scenario)
+========================================================================
+C1   Attacker PC: change the profile summary back (remove STEAM01).    4:50
+C2   DUT: remove Team Fortress 2 from the wishlist.                    4:51
+C3   Attacker PC: "Sign out of all other devices"?  NO - this would
+     also sign out the DUT. Instead just sign out on the PC.           4:51
+
+[ ] Wait 1 minute. Pull -Stage 04_after_cover                    PC time 4:52
+
+
+========================================================================
+STAGE D - (OPTIONAL) RUNTIME INSPECTION WITH FRIDA / OBJECTION
+========================================================================
+Only if frida-server (matching the PC frida version; x86_64 for the
+emulator, arm64 for the phone) is installed. Otherwise skip and note "skipped".
+D1   objection -g com.valvesoftware.android.steam.community explore
+       android keystore list        (names/aliases only - no secrets)
+       env                          (app paths)
+D2   Note the output in NOTES (aliases only).                          5:15
+
+
+========================================================================
+STAGE E - REMOVE THE AUTHENTICATOR FROM THE DUT (the "deletion")
+========================================================================
+E1   On the ORIGINAL phone (emulator: friend's phone; Xiaomi: my
+     daily phone): Steam app > Move Authenticator, confirm by SMS.
+     The DUT loses the authenticator. 2-day restriction again.         6:57
+E2   DUT: open Steam, look at the Steam Guard tab; note what it says.  6:58
+
+[ ] Pull -Stage 05_after_move_away                               PC time 7:00
+
+E3   DUT: log out of Steam.                                            7:01
+[ ] Pull -Stage 06_after_logout                                  PC time 7:01
+
+E4   DUT: Settings > Apps > Steam > Storage > Clear data.
+     (Safe now: the authenticator is on the original phone.)           7:02
+[ ] Pull -Stage 07_after_clear_data                              PC time ________
+
+
+========================================================================
+NOTES (login request details, errors, anything unexpected)
+========================================================================
+
+3:54 -gpu swiftshader_indirect flag, emulator was restarted between stage 2 and stage B.
+16:01:19 added a WebView options file and 16:06:43 removed it; it had no effect. Steam restarted at 4:03.
+16:05 temporarily changed the screen size and density, then set them back.
+16:06:34 hid the WebView menu panel with Fix-SteamMenu.ps1 (display only; no app data changed).
+I also read the page's layout through the WebView debug connection while diagnosing.
+Root cause: the WebView is Chrome 69 and Steam's CSS needs Chrome 87 or later. This is also a finding about the emulator versus a real device.
+chrome hashcode 20C8BC1E92086B4516799F6D68EFF5027B6224D3D2B98C7472F14E538B95C1D6
+4:33 chrome update finished
+was kicked out from steam in the incognito mode, I don't know when. Reattempt to login at 4:41
+"B6/B7 skipped. Steam app 3.10.14 does not include chat; it asks to install the separate Steam Chat app. Not installed, to keep the run limited to the Steam app."
+17:03:29 – Claude opened Steam on the emulator to test Frida (PID 8998).
+frida-ps -Ua times out on this emulator (Frida 17.27.5 helper fails on Android 8); used attach by PID instead.
+B1 was done on the old WebView (Chrome 69). The WebView was switched to Chrome 124 at :. B2–B5 were done on Chrome 124.
+17:2x – waiting for friend to do E1; emulator left running and idle.
+07_after_clear_data (02:05:04 UTC): internal folder empty (tar = 1536 bytes, folder entry only). External folder no longer exists, so no external tar for stage 07. Script stopped on that check; fixed afterwards, no re-pull needed.
+========================================================================
+ANALYSIS CHECKLIST (after both runs)
+========================================================================
+1. collection_log.csv: every line hashes_match = True.
+2. Extract each tar to its own folder:
+     New-Item -ItemType Directory work_steam\<prefix>_<stage> -Force
+     tar -xf collected\<prefix>_<stage>.tar -C work_steam\<prefix>_<stage>
+3. Where does Steam write?  Diffoscope 01_baseline vs 02_after_guard on
+   throw-away copies (exclude *-wal, *-shm, *-journal).  List changed files.
+4. Current data: sqlite3 / DB Browser on throw-away copies of any SQLite file;
+   read shared_prefs\*.xml and any JSON files.
+5. Steam Guard data: find the file(s) holding the authenticator (search for
+   "shared_secret", "identity_secret", "revocation", "steamguard", the account
+   name / SteamID). Record path, format, and whether it is plain text,
+   encrypted, or tied to the Android Keystore. Do NOT copy values.
+6. Login approvals: search for the A2/A3 times, IP/location text, "approve",
+   "deny", "session", "confirmation" - is any record of A2-A4 kept on the DUT?
+7. Markers: scripts\Search-RawText.ps1 -Text STEAM01,STEAM03 on every stage.
+8. Deleted data: sqlite4n6 audit + carve (-f jsonl) on SQLite files; raw
+   pattern search for partial records.
+9. JADX on the Steam APK: which files, SharedPreferences and Keystore aliases
+   does the app use for the authenticator? (Steam 3.x is mostly React Native:
+   check assets\index.android.bundle too.)
+10. Findings CSV: time_utc, app, event, source, stage, status, method.
+
+QUESTIONS THIS RUN SHOULD ANSWER
+  Q1 Where is the authenticator stored, and is it protected (Keystore / encryption)?
+  Q2 Does the DUT keep any record of login approvals or denials (A2-A4)?
+  Q3 Is the attacker's sign-in (IP, location, time) visible on the DUT afterwards?
+  Q4 Do profile and wishlist changes (STEAM01, B4) leave traces after they are undone (C1, C2)?
+  Q5 What remains on the DUT after the authenticator is moved away (E1)?
+  Q6 What remains after logout and after clear data?
+  Q7 What differs between emulator (software Keystore, x86_64) and phone (likely hardware-backed Keystore, arm64)?

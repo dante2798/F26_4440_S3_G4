@@ -1,0 +1,18 @@
+- Receive chat
+- Receive shared link 
+- Open shared link
+- Receive call
+- Receive video call
+- Receive emoji on chat
+- Receive chat then deleted
+
+- Sending chat
+- Sending shared link
+- Sending emoji on chat
+- Answer call
+- Answer video call
+- Sending call
+- Sending video call
+- Sending chat then deleting 
+
+- Close DM

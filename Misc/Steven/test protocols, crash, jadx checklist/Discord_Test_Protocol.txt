@@ -1,0 +1,164 @@
+DISCORD TEST PROTOCOL - CSIS 4440 Group 4 (Steven)
+Version 1, written 2026-11-24. Use the SAME protocol for the phone run and the
+emulator re-run so the two can be compared.
+
+ROLES
+  Device under test (DUT) : Xiaomi Mi Note 2 - my own Discord account.
+                             (Emulator re-run: Android26, friend's account.)
+  Remote sender           : friend's account, Discord web in Chrome incognito on PC.
+  Same DM channel is used for every step. Do not use any other chat on the DUT
+  during the test.
+
+DEVICE FACTS (checked 2026-11-24 13:05 UTC over adb, no root)
+  Model Mi Note 2 (scorpio), MIUI 11, Android 8.0.0, API 26, build OPR1.170623.032,
+  ro.build.type user, CPU arm64-v8a, Discord 354.12 (354012) arm64-v8a,
+  tar + sha256sum in /system/bin, su = /sbin/su (Magisk).
+  Phone time zone Asia/Jakarta (UTC+7); PC is UTC-7. Phone clock ~2 s ahead of PC.
+
+TIME RULE
+  Write every time in UTC, HH:MM:SS, from the PC clock.
+  Quick way to get it: keep a PowerShell window open and press Up+Enter on:
+      [DateTime]::UtcNow.ToString('HH:mm:ss')
+  The pull script also records PC and phone UTC at every stage.
+
+MARKERS
+  Every message starts with its marker (TEST01, TEST02 ...). Never reuse a marker.
+  Search later with the marker only, e.g. "TEST07".
+
+TEST IMAGES (synthetic, in test_media\)
+  TEST04_received.png  SHA-256 C58950C06F909C3768F93DC8310696501EDFC667E7502D77DD57F5817DB49CAA
+  TEST14_sent.png      SHA-256 52238B9FFA2E802D2382C5EFF6BB20CE324783A02CC917EC63E0F788D1728D85
+  Discord may re-compress images, so a cached copy may have a different hash.
+  Look for the marker text in the picture instead.
+
+
+========================================================================
+PREPARATION (before any test step)
+========================================================================
+[v] P1  TWRP backup of the phone is on the PC.
+[v] P2  Play Store auto-update OFF for Discord. Phone date/time = automatic.
+[v] P3  Push the phone's test image so it is in the gallery BEFORE baseline:
+          adb -d push test_media\TEST14_sent.png /sdcard/Pictures/TEST14_sent.png
+          adb -d shell am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE -d file:///sdcard/Pictures/TEST14_sent.png
+[v] P4  Root check (approve the Magisk prompt on the phone):
+          adb -d shell su -c id            -> must show uid=0(root)
+[v] P5  Clean start: Settings > Apps > Discord > Storage > Clear data.
+        (Same starting point as the emulator: fresh login, empty cache.)
+[v] P6  Log in to Discord on the phone (my account). Open the DM with the
+        friend account once, then leave Discord idle for 2 minutes.
+[v] P7  Friend account logged in on PC (Chrome incognito), same DM open.
+
+Pull command for every stage (project folder, PowerShell):
+    powershell -ExecutionPolicy Bypass -File scripts\Pull-DiscordPhone.ps1 -Stage <stage>
+  It force-stops Discord, makes one tar of /data/data/com.discord on the phone,
+  hashes it there, pulls it to phone\, hashes it again and logs both in
+  phone\collection_log.csv. Re-open Discord after every pull.
+  If it shows "MISMATCH", run it again with the stage name + "_b".
+
+
+========================================================================
+STAGE 01 - BASELINE
+========================================================================
+[ ] Pull: -Stage 01_baseline                                   UTC 6:39	
+
+
+========================================================================
+STAGE A - RECEIVE (friend on PC sends, phone has the DM open unless stated)
+========================================================================
+Step  What the FRIEND (PC) does                         Phone does         UTC
+A1    Send "TEST01 plain message"                       read it            6:42
+A2    Send "TEST02 link opened https://example.com"     tap link, open it,
+                                                         come back          6:42
+A3    Send "TEST03 link not opened https://example.org" do NOT tap it       6:43
+A4    Upload TEST04_received.png with text "TEST04"     open the image      6:43
+A5    Send "TEST05 emoji 😀🔥"                            read it            6:43
+A6    Send "TEST06 sender will delete this"             read it            6:44
+      wait 30 s, then DELETE TEST06                                         6:45
+A7    Send "TEST07 original text"                       read it            6:45
+      wait 30 s, EDIT it to "TEST07 edited text"                            6:46
+A8    Phone: press Home (Discord in background).
+      Send "TEST08 background notification"             do NOT open it yet  6:56
+      Phone: open Discord from the notification                             6:56
+A9    Voice call the phone                              answer, ~15 s,
+                                                         hang up            6:54 - 6:56
+A10   Video call the phone                              answer, ~15 s,
+                                                         hang up            6:57 - 6:58
+A11   Voice call the phone                              do NOT answer
+                                                         (missed call)      6:58
+
+[ ] Wait 1 minute. Pull: -Stage 02_after_receive               UTC 7:01
+
+
+========================================================================
+STAGE B - SEND (phone sends to friend)
+========================================================================
+B1    Send "TEST11 plain message from phone"                                7:02
+B2    Send "TEST12 link from phone https://example.net"                     7:02
+B3    Send "TEST13 emoji from phone 😀🔥"                                    7:03
+B4    Upload TEST14_sent.png from the gallery, text "TEST14"                7:03
+B5    Add a reaction (👍) to TEST01                                          7:04
+B6    Reply to TEST01 with "TEST15 reply from phone"                        7:05
+B7    Send "TEST16 phone will delete this" (deleted in stage C)             7:05
+B8    Voice call the friend; friend answers, ~15 s                          7:07 - 7:08
+B9    Video call the friend; friend answers, ~15 s                          7:08 - 7:09
+
+[ ] Wait 1 minute. Pull: -Stage 03_after_send                  UTC 7:10
+
+
+========================================================================
+STAGE C - DELETE (phone)
+========================================================================
+C1    Delete own message TEST16                                             7:12
+C2    Delete own image message TEST14                                       7:12
+C3    Remove the 👍 reaction from TEST01                                     7:12
+
+[ ] Wait 1 minute. Pull: -Stage 04_after_delete                UTC 7:13
+
+C4    Close the DM (long-press DM > Close DM)                               7:13
+
+[ ] Wait 1 minute. Pull: -Stage 05_after_close_dm              UTC 7:15
+
+
+========================================================================
+STAGE D - LOGOUT AND CLEAR DATA
+========================================================================
+D1    Log out of Discord on the phone                                       7:16
+[ ] Pull: -Stage 06_after_logout                               UTC 7:17
+
+D2    Settings > Apps > Discord > Storage > Clear data                      7:18
+[ ] Pull: -Stage 07_after_clear_data                           UTC 7:18
+
+
+========================================================================
+NOTES DURING THE TEST (anything unexpected, errors, extra taps)
+========================================================================
+
+at A8 I didn't receive any notification. I've checked the option in the setting and discord to no result. Turns out I need to logout from my PC client first to get the notification works. I assume that because my PC receiving notification, the phone detect that I already get the notification.
+
+
+========================================================================
+AFTER THE TEST - ANALYSIS CHECKLIST (per stage)
+========================================================================
+1. Hash list check: phone\collection_log.csv - every line hashes_match = True.
+2. Extract each tar to its own work folder (Windows tar keeps file times):
+     New-Item -ItemType Directory work_phone\<stage> -Force
+     tar -xf phone\discord_<stage>.tar -C work_phone\<stage>
+3. Live messages: sqlite3 query (step 3 method) on a query_ copy.
+4. Deleted records: sqlite4n6 carve <a> -f jsonl, then
+     scripts\Convert-CarvedJsonl.ps1 (and Read-CarvedDM.ps1 with the DM channel ID).
+5. Raw search for every marker TEST01..TEST16 in all files; for each hit read the
+   key BEFORE the text (messages.<channel>.<message id>).
+6. Activity log: scripts\Export-DiscordTelemetry.ps1 (adapt the path to work_phone).
+7. Notification log: shared_prefs\push_notification_monitor.xml.
+8. Images: look for TEST04 / TEST14 in cache\ (open files as images).
+9. Diffoscope between consecutive stages, on throw-away copies.
+10. Fill the findings CSV: time_utc, app, event, source, stage, live/deleted.
+
+QUESTIONS THIS RUN SHOULD ANSWER
+  Q1 Is plain DM text (TEST01, TEST11) stored on the phone at all?
+  Q2 Does opening a link change what is saved (TEST02 opened vs TEST03 not)?
+  Q3 Do deleted messages survive: deleted by sender (TEST06) vs by me (TEST16)?
+  Q4 Does the original text survive an edit (TEST07)?
+  Q5 Are received/sent images cached, and do they survive deletion (TEST04, TEST14)?
+  Q6 Do notification log, activity log and token behave as on the emulator at logout?
+  Q7 What differs between phone (MIUI, arm64, hardware keystore) and emulator?

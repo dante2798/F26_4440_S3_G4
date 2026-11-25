@@ -1,0 +1,193 @@
+STEAM TEST PROTOCOL - PHONE RUN - CSIS 4440 Group 4 (Steven)
+Version 1, written 2026-11-25. Mirrors Steam_Test_Protocol.txt (emulator) so the
+two runs can be compared (Q7). Same stages, same markers. Changes vs the emulator
+protocol are marked [NEW] or [CHANGED] and come from what the emulator run found.
+
+WHY THE STAGES ARE UNCHANGED
+  The emulator and phone must run the SAME steps or the comparison is invalid.
+  Improvements are in PREP, in what we COLLECT, and in a couple of extra checks -
+  not in the scenario itself.
+
+ROLES
+  DUT  : Xiaomi Mi Note 2 (serial 2c3f64eb), MY OWN Steam account, authenticator
+         already moved here (done). Steam 3.10.14, arm64-v8a.
+  "Attacker" PC : Chrome incognito on the PC, signing in to the SAME account on
+         store.steampowered.com / steamcommunity.com, signed OUT to start.
+  Original phone : my daily phone - where the authenticator is moved BACK to in E1.
+
+TIME RULE   Write PC clock time (local, UTC-7), HH:MM:SS. The pull script records
+            UTC + device time. Emulator log times were UTC; keep noting UTC too.
+
+MARKERS     Reuse the SAME markers as the emulator run so hits line up:
+            STEAM01 (profile), STEAM03 (chat, skipped). Never invent new ones.
+
+SAFETY (unchanged, read first)
+  1. Authenticator is on the DUT. NEVER clear Steam data / uninstall while it is
+     here. Move it away first (Stage E). Clearing first = revocation code + 15-day
+     restriction.
+  2. Revocation code (R....) written OFF the phone, OUT of this folder. Never type
+     it into any file, report or screenshot.
+  3. Record WHERE Steam Guard secrets live and HOW protected. Never copy values.
+     Keep collected\ off GitHub (it holds live login tokens - see emulator run).
+  4. Only my own account, with consent.
+
+PULL COMMAND (phone uses Magisk su, NOT adb root - no -AdbRoot flag):
+  powershell -ExecutionPolicy Bypass -File scripts\Pull-AppData.ps1 -Serial 2c3f64eb -Package com.valvesoftware.android.steam.community -Prefix steam_phone -IncludeExternal -Stage <stage>
+  Output: collected\steam_phone_<stage>.tar (+ _external.tar), collection_log.csv.
+  The script force-stops Steam; reopen it afterwards. MISMATCH -> rerun as <stage>_b.
+
+
+========================================================================
+PREPARATION  (do all before Stage 01)
+========================================================================
+[ ] PP1 TWRP backup of the phone done (yes/no): yes
+[ ] PP2 Play Store auto-update OFF for Steam. Confirm version is still 3.10.14:
+        Settings > Apps > Steam, or: adb -s 2c3f64eb shell dumpsys package com.valvesoftware.android.steam.community | findstr versionName
+        Version seen: 3.10.14
+[ ] PP3 Clear data BEFORE the authenticator move - this was supposed to be done
+        before PP5. If it was NOT done, do NOT clear now (would lose authenticator).
+        Just record: "PP3 not done; Steam data not cleared before move." Status: PP3 not done
+[ ] PP4 Already logged in with my account (done).
+[ ] PP5 Authenticator already moved to this phone (done). Record approx date/time
+        of the move, and that a laptop sign-in was approved with it before testing:
+        Tuesday around 7:50 pm (utc-7)
+[ ] PP6 Revocation code written down off the phone (yes/no): yes
+[ ] Root check (phone uses su): adb -s 2c3f64eb shell su -c id   -> expect uid=0 | checked.
+[ ] Attacker PC: Chrome incognito ready, signed OUT of Steam.
+
+[NEW] PP7 WebView check (the emulator needed a WebView fix for the black box):
+        adb -s 2c3f64eb shell dumpsys webviewupdate | findstr "Current WebView package"
+        Version seen: 132.0.6834.122
+        - If version >= 87: Store/News/Profile should render; no fix needed.
+        - If old: the Community/Store web pages may show a black box like the
+          emulator. If so, a WebView/Chrome update is needed - BUT get the ARM64
+          (arm64-v8a) build, NOT the x86_64 one used for the emulator. Check with me
+          before installing on the real phone.
+        Needed a WebView fix? (yes/no): no  If yes, version installed: __________
+
+[NEW] PP8 adb backup check (static analysis found allowBackup=false - verify it
+        really yields nothing, as a no-root exfencer would hit this):
+        adb -s 2c3f64eb backup -f nul com.valvesoftware.android.steam.community
+        (cancel/allow on phone). Expected: empty/refused. Result: backup opened, I didn't back it up.  Q: Q6,Q7
+
+[NEW] PP9 Keystore backing check (Q7 - phone likely hardware-backed vs emulator
+        software). Record (do NOT extract anything):
+        adb -s 2c3f64eb shell getprop | findstr -i "keystore keymaster"
+        Notes: [init.svc.keymaster-3-0]: [running]
+[init.svc.keystore]: [running]
+[ro.boot.keymaster]: [1]  Q: Q7
+
+
+========================================================================
+STAGE 01 - BASELINE (logged in, authenticator active, nothing else done)
+========================================================================
+[CHANGED] Confirm Store + Community pages render first (WebView OK), THEN pull.
+[ ] Pull -Stage 01_baseline                                      PC time 9:37
+
+
+========================================================================
+STAGE A - STEAM GUARD EVENTS
+========================================================================
+A1  DUT: open Steam Guard tab, leave code screen ~30 s (do NOT write code). 9:39
+A2  Attacker PC: sign in (password). DUT shows a login request. Note what it
+    shows (location/device/IP) in NOTES. APPROVE on the DUT.                9:40
+A3  Attacker PC: sign out, sign in again. DENY it on the DUT.               9:41
+A4  Attacker PC: sign in, choose "enter a code instead", type current DUT code. 9:42
+A5  DUT: Steam Guard tab > recent sign-ins / authorized devices - note it.  9:43
+[ ] Wait 1 min. Pull -Stage 02_after_guard                       PC time 9:45
+
+
+========================================================================
+STAGE B - ACCOUNT ACTIVITY
+========================================================================
+B1  Attacker PC: change profile summary to "STEAM01 profile edited by attacker". 9:45
+B2  DUT: open own profile, refresh until STEAM01 shows.                     9:45
+B3  DUT: Store > search "Team Fortress 2", open its page.                   9:49
+B4  DUT: add Team Fortress 2 to the wishlist.                              9:49
+B5  DUT: open Notifications (bell), read them. [NEW] On MY account there SHOULD be
+    real notifications (wishlist discounts) - unlike the empty friend account.
+    Note what appears; later search the pulls for the discounted game names. 9:50
+B6/B7  [CHANGED] SKIP (Steam Chat is a separate app). Record "skipped".
+[ ] Wait 1 min. Pull -Stage 03_after_activity                    PC time 9:53
+
+
+========================================================================
+STAGE C - COVERING TRACKS
+========================================================================
+C1  Attacker PC: change profile summary back (remove STEAM01).             9:53
+C2  DUT: remove Team Fortress 2 from the wishlist.                          9:54
+C3  Attacker PC: just sign out on the PC. Do NOT "sign out of all devices". 9:54
+[ ] Wait 1 min. Pull -Stage 04_after_cover                       PC time 9:55
+
+
+========================================================================
+STAGE D - RUNTIME INSPECTION (frida / objection)   [CHANGED - lessons applied]
+========================================================================
+Use the ARM64 frida-server (match PC frida 17.27.5). Push to /data/local/tmp,
+chmod 755. Start as root via su.
+[NEW] frida-ps -Ua TIMED OUT on the emulator (helper fails). If it times out here
+      too, attach by PID instead:
+        adb -s 2c3f64eb shell pidof com.valvesoftware.android.steam.community
+        .\tools\envs\mobile\Scripts\objection.exe -n <pid> start
+D1  At the objection prompt (aliases/paths ONLY, no secret values, no dumps):
+        env
+        android keystore list
+D2  Record paths + key ALIAS + Key/Certificate/auth flags. Compare to emulator
+    (emulator: alias key_v1, Key=True, Cert=False, "Unauthenticated").       10:09
+    [NEW] Q7: note if the phone key is hardware/TEE-backed (cannot be extracted),
+    vs emulator software keystore.
+[NEW] Stop cleanly: exit objection, then:
+        adb -s 2c3f64eb shell su -c "pkill -9 frida-server"
+        adb -s 2c3f64eb shell su -c "pidof frida-server"   (should print nothing)
+Do NOT: keystore dump, memory dump, hooking, sslpinning disable.
+
+
+========================================================================
+STAGE E - REMOVE AUTHENTICATOR, LOGOUT, CLEAR DATA
+========================================================================
+E1  On the ORIGINAL (daily) phone: Steam app > Move Authenticator, confirm by SMS.
+    DUT loses the authenticator. 2-day restriction again.                   10:23
+E2  DUT: open Steam, Steam Guard tab - note what it says.                   10:29
+[ ] Pull -Stage 05_after_move_away                               PC time 10:30
+E3  DUT: log out of Steam.                                                  10:30
+[ ] Pull -Stage 06_after_logout                                  PC time 10:31
+E4  DUT: Settings > Apps > Steam > Storage > Clear data (safe now).         10:32
+[ ] Pull -Stage 07_after_clear_data                              PC time 10:33
+
+
+========================================================================
+NOTES (login request details - location/IP/device, errors, anything odd)
+========================================================================
+B3 - typed dawnwalker, added the blood of dawnwalker instead of tft2 since I have it on my library already
+B5 - Manor Lords(nov 24), Stray(nov 22), NieR:Automata(nov 19), TEKKEN 8 (nov 18) on sale. Y0ri_ friend request (nov 12)
+C2 - Removed blood of dawnwalker
+E1 - kicked out from original phone, relogin and have to approve from DUT phone 10:12
+somehow both phone have the authenticator. Clear cache solved the problem
+E2 - kicked out from DUT steam, have to relogin. 10:26
+
+========================================================================
+ANALYSIS - reuse the emulator scripts with -Prefix steam_phone
+========================================================================
+1. collection_log.csv: every steam_phone line hashes_match = True. yes
+2. Extract each tar to work_steam\steam_phone_<stage> (tar -xf ... -C ...).
+3. Stage diffs:
+     powershell -File scripts\Compare-Stages.ps1 -Root work_steam -Prefix steam_phone -Stages 01_baseline,02_after_guard,03_after_activity,04_after_cover,05_after_move_away,06_after_logout -Out work_steam\changes_phone.csv
+4. Storage contents (no values printed):
+     python -I scripts\inspect_steam_storage.py work_steam\steam_phone_<stage>
+5. Web cache decode + marker search:
+     python -I scripts\decode_webview_cache.py "<...\HTTP Cache\Cache_Data>" work_steam\decoded_phone\<stage>
+     powershell -File scripts\Search-RawText.ps1 -Path work_steam\steam_phone_<stage> -Text STEAM01,"Team Fortress"
+
+TARGETED CHECKS (confirm or contrast each emulator finding) - Q7 table
+  [ ] Tokens: RKStorage refreshToken/accessToken in PLAIN TEXT? (emulator: YES)
+  [ ] Cookies: steamLoginSecure still present AFTER logout (06)? (emulator: YES)
+  [ ] SecureStore: AES-GCM, requireAuthentication=false, alias key_v1? (emulator: YES)
+  [ ] Keystore backing: hardware/TEE on phone vs software on emulator? (Q7)
+  [ ] STEAM01 gone from cache after undo (04)? (emulator: YES)
+  [ ] "Removing local authenticator" log line present after E1? (emulator: YES)
+  [ ] WebView: did the phone need the fix the emulator needed? (Q7)
+  [ ] Notifications: discounted-game names stored on device? (phone has real ones)
+  [ ] adb backup (PP8) yielded nothing? (allowBackup=false)
+
+REMINDER: findings CSV (time_utc, app, event, source, stage, status, method) and
+write-up come AFTER both runs, so Q1-Q7 get one emulator+phone answer each.

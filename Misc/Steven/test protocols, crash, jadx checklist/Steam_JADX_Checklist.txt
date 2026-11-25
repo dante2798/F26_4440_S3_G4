@@ -1,0 +1,303 @@
+STEAM APK STATIC ANALYSIS CHECKLIST - CSIS 4440 Group 4 (Steven)
+Version 1, written 2026-11-25. APK: apks\Steam_3.10.14.apk
+(universal: arm64-v8a, armeabi-v7a, x86, x86_64).
+One analysis covers both the emulator and the phone - the Java and JavaScript
+code is the same for every architecture; only lib\<arch>\*.so differs.
+
+HOW TO FILL
+  For each item write: Found (Y/N), Where (class / file), What it shows, Q#.
+  Q1 authenticator storage and protection    Q2 login approval records on device
+  Q3 attacker sign-in visible on device       Q4 traces left after an undo
+  Q5 state after authenticator moved away      Q6 after logout / after clear data
+  Q7 emulator vs phone difference              X  general security note
+
+RULES
+  - Record that keys/secrets EXIST and WHERE. Never copy their values.
+  - Quote only short snippets in the report. Keep decompiled code and the
+    extracted APK off GitHub.
+  - Hermes bundle string hits are neighbours in a string table: a hint, not proof.
+
+TOOLS
+  JADX : run tools\jadx-gui-1.5.7-with-jre-win\jadx-gui-1.5.7.exe
+         File > Open files > apks\Steam_3.10.14.apk ; wait for the bottom bar.
+         Search: Navigation > Text search (Ctrl+Shift+F).
+         Double-click a hit to open it; right-click a method > Find usage.
+         The "duplicated class DebugProbesKt" warning is harmless.
+  Bundle (Part C): extract once, from the project folder:
+    New-Item -ItemType Directory work_steam\apk_steam_3.10.14 -Force
+    tar -xf apks\Steam_3.10.14.apk -C work_steam\apk_steam_3.10.14
+  Search a bundle string:
+    powershell -ExecutionPolicy Bypass -File scripts\Search-RawText.ps1 -Path work_steam\apk_steam_3.10.14\assets -Text "term1,term2" -Exclude "\\lib\\"
+
+Started: 7:45    Finished: 9:05
+
+
+========================================================================
+PART A - MANIFEST AND RESOURCES  (JADX left panel > Resources)
+========================================================================
+A1  AndroidManifest.xml: package / versionName / versionCode / minSdk / targetSdk
+    Found: y  Value: versionName:"3.10.14" versionCode:"11248354" minSdkVersion:"26" targetSdkVersion:"36" Q: X
+
+A2  android:allowBackup  (true / false / missing = treated as true on Android 8)
+    If true, adb backup may copy app data WITHOUT root - note to test on phone.
+    Found: y  Value: false  Q: Q6,Q7
+
+A3  android:fullBackupContent / android:dataExtractionRules -> open the XML it
+    points to in res\xml\. Which folders are included or excluded from backup?
+    Is SecureStore.xml or RKStorage excluded?
+    Found: n  File: ____________________  Notes: N/A — allowBackup=false  Q: Q1,Q6
+
+A4  android:debuggable  (should be missing or false in a release build)
+    Found: n  Value: ______  Q: X
+
+A5  android:networkSecurityConfig -> res\xml\<file>.xml
+    cleartextTrafficPermitted? <pin-set> present (cert pinning)? user CAs trusted?
+    Found: y  Notes: cleartextTrafficPermitted="true"
+					<certificates src="system"/>
+					<certificates src="user"/>
+					Q: X
+
+A6  Permissions (<uses-permission>) - list the notable ones:
+    CAMERA (QR login), USE_BIOMETRIC / USE_FINGERPRINT, POST_NOTIFICATIONS,
+    ACCESS_*_LOCATION, READ_PHONE_STATE, RECEIVE_BOOT_COMPLETED
+    List: READ_PHONE_STATE, USE_FINGERPRINT, USE_BIOMETRIC, MODIFY_AUDIO_SETTINGS, CAMERA, READ_EXTERNAL_STORAGE, WRITE_EXTERNAL_STORAGE, WRITE_SETTINGS, ACCESS_COARSE_LOCATION, ACCESS_FINE_LOCATION Q: X
+
+A7  Exported components (exported="true" or with an <intent-filter>):
+    activities / receivers / services / providers. Note deep-link schemes.
+    List: MainActivity, DiagnosticsReceiver, FirebaseInstanceIdReceiver, ProfileInstallReceiver Q: X
+
+A8  FileProvider: <provider ...FileProvider> -> res\xml\<paths> file.
+    Which app folders can be shared to other apps?
+    Found: y  Paths: android:name="expo.modules.sharing.SharingFileProvider"
+	android:name="com.reactnativecommunity.webview.RNCWebViewFileProvider"
+	android:name="cl.json.RNShareFileProvider"
+	android:name="expo.modules.filesystem.FileSystemFileProvider"
+Q: X
+
+A9  res\values\strings.xml: google_api_key / firebase_database_url /
+    gcm_defaultSenderId / project_id. Record EXISTENCE only.
+    Found: y  Which: res>raw>firebase_common_keep.xml  Q: X
+
+A10 Expo updates config (meta-data "expo.modules.updates.*" in the manifest, or
+    res\values\strings.xml). Emulator log said expo-updates was "disabled due to
+    an invalid configuration" - is the update URL empty or disabled?
+    Found: y  Notes: <meta-data
+            android:name="expo.modules.updates.ENABLED"
+            android:value="true"/>
+        <meta-data
+            android:name="expo.modules.updates.EXPO_UPDATES_CHECK_ON_LAUNCH"
+            android:value="ERROR_RECOVERY_ONLY"/>
+        <meta-data
+            android:name="expo.modules.updates.EXPO_UPDATES_LAUNCH_WAIT_MS"
+            android:value="0"/>
+  Q: X
+
+
+========================================================================
+PART B - JAVA / KOTLIN CODE  (JADX Text search, Ctrl+Shift+F)
+========================================================================
+--- Steam Guard storage and encryption (Q1) ---
+B1  keystoreUnauthenticated
+    Expo SecureStore class. Confirms the "Unauthenticated" alias seen in objection.
+    Found: y  Class: SecureStoreModule class  
+	public static final String UNAUTHENTICATED_KEYSTORE_SUFFIX = "keystoreUnauthenticated";
+	Q: Q1
+
+B2  AES/GCM/NoPadding
+    The cipher. Confirm AES-GCM, 128-bit tag (matches tlen:128 in SecureStore.xml).
+    Found: y  Class: AESEncryptor
+	Override // expo.modules.securestore.encryptors.KeyBasedEncryptor
+    public String getKeyStoreAlias(SecureStoreOptions options) {
+        Intrinsics.checkNotNullParameter(options, "options");
+        return "AES/GCM/NoPadding:" + options.getKeychainService();
+    }
+
+	Q: Q1
+
+B3  KeyGenParameterSpec
+    How key_v1 is created. Record whether these are present / their argument:
+      setUserAuthenticationRequired(options.getRequireAuthentication())   <- true only when requireAuth=true?
+      setUserAuthenticationValidityDurationSeconds( ____ ) not found
+      setIsStrongBoxBacked( ____ ) not found
+      setUnlockedDeviceRequired( ____ ) not found
+    Found: y  Class: AESEncryptor  Q: Q1,Q7
+
+B4  AndroidKeyStore
+    Any OTHER code using the Keystore besides SecureStore. List classes.
+    Found: y  Classes: CryptoObjectUtils, SecureStoreModule  Q: Q1
+
+B5  requireAuthentication
+    Where SecureStore decides if a prompt is needed. Is there any path that could
+    be set to true (an option Steam could have used but did not)?
+    Found: Y  Notes: SecureStore passes options.getRequireAuthentication() straight
+      into setUserAuthenticationRequired (see B3). The "true" path EXISTS in the
+      library, but Steam stores the authenticator with requireAuthentication=FALSE
+      (matches SecureStore.xml). So Steam chose not to require unlock/biometric.  Q: Q1
+
+--- Plain-text storage (explains the tokens found in RKStorage) (Q6) ---
+B6  catalystLocalStorage   (and: ReactDatabaseSupplier, RKStorage)
+    Confirm AsyncStorage is plain SQLite with NO encryption layer.
+    Found: Y  Class: ReactDatabaseSupplier (5 refs) + catalystLocalStorage (3 refs).
+      Plain SQLite table catalystLocalStorage(key,value) - no cipher. This is the
+      RKStorage DB that held refreshToken/accessToken in plain text.  Q: Q6
+
+B7  EncryptedSharedPreferences   /   androidx.security.crypto
+    Does Steam use encrypted prefs anywhere? (Expected: no - shows the tokens are
+    unprotected.) Y/N is itself the finding.
+    Found: N  Notes: EncryptedSharedPreferences = 0 hits, androidx.security.crypto =
+      0 hits in all 4 dex. Steam does NOT use encrypted prefs. Only the Keystore
+      (via Expo SecureStore) protects data; everything in RKStorage is plain text.  Q: Q6
+
+--- Cookies and logout (explains "Deleted 0 cookies" + cookies left after logout) ---
+B8  CookieManager   (and removeAllCookies / removeSessionCookies / flush)
+    Which class clears cookies, and on what event (logout)? Does it run on the
+    WebView's own cookie store or a separate one?
+    Found: Y  Class: android.webkit.CookieManager (11 refs); removeAllCookies (2),
+      removeSessionCookies (1). Acts on the WebView's own cookie store. The
+      "Clearing cookies (auth changed)" message is triggered from Steam's JS
+      (see C3), which calls into CookieManager.  Q: Q6
+
+B9  "Clearing cookies"  or  clearCookies / onAuthChanged / signOut / logout
+    The logout path. Does it delete WebView cookies, or only the in-memory session?
+    Found: Y  Notes: "Clearing cookies (auth changed)" is a string in the Hermes
+      bundle (Steam's JS), so the trigger is in Steam logic, not the OS. BUT the
+      emulator evidence showed the log then said "Deleted 0 cookies" and
+      steamLoginSecure cookies REMAINED after logout (stages 05,06). So the clear
+      runs on an auth change but does not actually remove the persisted login
+      cookies - a real gap. Confirm the same on the phone.  Q: Q6
+
+--- WebView configuration (Q7 and general) ---
+B10 setWebContentsDebuggingEnabled
+    Does Steam enable WebView debugging itself? (On the emulator it was on only
+    because the system image is debuggable - confirm the app does not force it.)
+    Found: Y  Value/condition: 1 ref in dex. Present but called once - typically
+      gated on a debug/dev flag in React Native. Could not confirm the exact
+      condition from strings alone. On the emulator, WebView debugging was
+      reachable because the SYSTEM IMAGE is debuggable, not necessarily because
+      Steam forced it. On the phone (release image) test whether the WebView is
+      debuggable; if not, this is a Q7 emulator-vs-phone difference.  Q: Q7,X
+
+B11 setJavaScriptEnabled / addJavascriptInterface / setAllowFileAccess
+    Any JS bridge exposed to the Steam web pages, or file access left on.
+    Found: Y  Notes: setJavaScriptEnabled (2), addJavascriptInterface (1),
+      setAllowFileAccess (4). Expected for the react-native-webview the Store/
+      Community pages run in. Means Steam's web pages talk to native code through a
+      JS bridge; note as attack surface if a page were ever compromised.  Q: X
+
+--- Biometrics / local auth (ties to requireAuthentication) ---
+B12 BiometricPrompt  /  LocalAuthentication  /  expo.modules.localauthentication
+    Does Steam support a biometric lock at all? Is it used for Steam Guard?
+    Found: Y (library present, not used for Steam Guard)  Notes: BiometricPrompt (12
+      refs), expo.modules.localauthentication (1). The capability EXISTS, but
+      because the authenticator is stored with requireAuthentication=false (B3/B5),
+      no biometric/unlock is required to decrypt it. So biometrics is available but
+      NOT applied to Steam Guard.  Q: Q1
+
+
+========================================================================
+PART C - HERMES BUNDLE STRINGS  (Steam's own logic; not readable as code)
+========================================================================
+assets\index.android.bundle is Hermes bytecode - JADX cannot decompile it.
+Search its STRINGS with Search-RawText.ps1 (see TOOLS). Record the string and
+any useful neighbours.
+
+C1  Removing local authenticator       (the Q5 log line - confirm it is Steam's)
+    Found: Y (bundle pg 528)  Nearby strings: "Removing local authenticator secrets
+      for" - exact prefix of the emulator log line. Confirms the Q5 message comes
+      from Steam's own JS logic.  Q: Q5
+
+C2  current.txt , previous.txt
+    The log file names. Neighbours may show how many sessions are kept / rotation.
+    Found: Y (pg 445/446)  Notes: Both names present. Pairing of current.txt +
+      previous.txt = Steam keeps the current session log and ONE previous session
+      (matches what the pulls showed). So at most 2 sessions of logs on disk.  Q: Q6,X
+
+C3  Clearing cookies , Deleted , auth changed
+    Cookie-clearing messages; look for a nearby "logout" / "sign out" string.
+    Found: Y (pg 452)  Notes: "Clearing cookies (auth changed)" present as one
+      string -> the clear is tied to an AUTH CHANGE, not an explicit logout button.
+      This explains why login cookies survived logout (see B9).  Q: Q6
+
+C4  SteamGuard , shared_secret , identity_secret , revocation_code
+    Field names used around the authenticator entry. RECORD NAMES ONLY, never
+    values. Which of these appear?
+    Found: Y  Which names: shared_secret, identity_secret, revocation_code,
+      revocation_reason, revocation_attempts_remaining, SteamGuardCode,
+      SteamGuard_NewDevice, AuthenticationSupport.MarkTokenCompromised,
+      Authentication.GetAuthSessionRiskInfo. These are the Steam Guard secret FIELD
+      NAMES (protobuf) - values live encrypted in SecureStore.xml, NOT here.  Q: Q1
+
+C5  loginRequest , not fully logged in , approve , deny , confirmation
+    Strings tied to the A2-A4 approve/deny flow. Are approve/deny or IP/location
+    strings present in the bundle (shown on screen) vs stored on disk?
+    Found: Y  Notes: "loginRequest", "not fully logged in on this device.",
+      "approve sign in", "approved your request..." all present as UI strings in the
+      bundle. So approve/deny text is rendered on screen from these templates, but
+      the emulator pulls showed NO approve/deny record or IP/location saved to disk.
+      -> shown to the user, not persisted. Supports Q2/Q3 = nothing stored.  Q: Q2,Q3
+
+C6  wishlist , AddToWishlist , RemoveFromWishlist
+    Confirms wishlist actions are web calls (seen only in the web cache, not in a
+    local DB) - supports the Q4 finding.
+    Found: Y  Notes: Wishlist_AddToWishlist_Request/Response and
+      Wishlist_RemoveFromWishlist_Request/Response present = server RPCs, not local
+      storage. Matches the emulator result (TF2 wishlist only in the web cache,
+      never in a local DB; removal left the cached page behind).  Q: Q4
+
+
+========================================================================
+SUMMARY - ANSWER EACH QUESTION FROM THE ITEMS ABOVE
+========================================================================
+Q1 Authenticator storage & protection:
+   Stored in shared_prefs\SecureStore.xml, entry key_v1-SteamGuard_1. Encrypted
+   with AES/GCM/NoPadding (tag 128) using Android Keystore alias key_v1 (Expo
+   SecureStore, AESEncryptor). KeyGenParameterSpec sets
+   setUserAuthenticationRequired(requireAuthentication) but Steam passes FALSE, so
+   no PIN/biometric is needed to decrypt. No StrongBox / UnlockedDeviceRequired.
+   BiometricPrompt exists in the app but is not applied to Steam Guard. Secret
+   field names (shared_secret, identity_secret, revocation_code) appear in the
+   bundle as protobuf names only; values stay encrypted in SecureStore.xml.
+
+Q2 Login approval records on device:
+   No approve/deny record and no IP/location persisted. The approve/deny UI text
+   exists in the bundle (rendered on screen) but the pulls stored nothing.
+
+Q3 Attacker sign-in visible on device:
+   Not stored. Only indirect: Steam Guard screen activity timing + Google Maps
+   files appearing during Stage A (location likely shown, not saved).
+
+Q4 Traces after an undo:
+   Profile edit STEAM01 cached in 03, gone in 04 after undo. Wishlist add/remove
+   are server RPCs (C6); TF2 only in the web cache, no local DB record.
+
+Q5 After authenticator moved away:
+   Log "Removing local authenticator secrets for <id>..." (01:58:44 UTC).
+   SecureStore entry shrank 619 -> 184 chars but the entry REMAINED. Three
+   ignored loginRequest notifications just before.
+
+Q6 After logout / clear data:
+   Logout: tokens removed from RKStorage (plain SQLite, no encryption - B6/B7),
+   BUT WebView steamLoginSecure cookies and the log files remained. "Clearing
+   cookies (auth changed)" then "Deleted 0 cookies" (B9/C3). Clear data: both
+   internal + external folders emptied. allowBackup=false so no adb-backup path.
+
+Q7 Emulator vs phone (confirm on phone):
+   Code identical for both. Device differences to verify on the Xiaomi:
+   (a) Keystore hardware-backed vs software (affects whether key_v1 is extractable
+   with root); (b) WebView version / black-box fix; (c) whether the WebView is
+   debuggable on a release image (B10).
+
+X  Other security notes:
+   - A5 network_security_config: cleartextTrafficPermitted=true AND trusts USER
+     CAs, no pin-set = no certificate pinning -> traffic can be MITM'd with a user
+     CA. Significant finding.
+   - A2 allowBackup=false (good). A4 not debuggable (good).
+   - JS bridge enabled in the WebView (B11) = attack surface via web content.
+
+CROSS-CHECK WITH THE EMULATOR RUN (already found)
+  - SecureStore.xml entry key_v1-SteamGuard_1: AES-GCM, Keystore alias key_v1,
+    requireAuthentication=false, tlen=128. B1-B5 should explain HOW this is built.
+  - RKStorage held refreshToken + accessToken in PLAIN TEXT (stages 01-05);
+    gone after logout (06). B6/B7 should confirm there is no encryption.
+  - WebView Cookies kept steamLoginSecure after logout (05, 06). B8/B9 explain why.
+  - Clear data (07) emptied both internal and external folders.
